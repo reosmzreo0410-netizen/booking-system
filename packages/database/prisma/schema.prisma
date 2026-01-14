@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          Role      @default(MEMBER)
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiry   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  availableBlocks     AvailableBlock[]
+  participations      ReservationParticipant[]
+  createdReservations Reservation[]            @relation("CreatedBy")
+}
+
+model AvailableBlock {
+  id            String   @id @default(cuid())
+  adminId       String
+  admin         User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  googleEventId String   @unique
+  title         String?
+  startTime     DateTime
+  endTime       DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([adminId])
+  @@index([startTime, endTime])
+}
+
+model Reservation {
+  id            String            @id @default(cuid())
+  blockId       String
+  block         AvailableBlock    @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  creatorId     String
+  creator       User              @relation("CreatedBy", fields: [creatorId], references: [id], onDelete: Cascade)
+  type          ReservationType
+  startTime     DateTime
+  endTime       DateTime
+  title         String?
+  agenda        String?
+  googleEventId String?
+  status        ReservationStatus @default(CONFIRMED)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  participants ReservationParticipant[]
+
+  @@index([blockId])
+  @@index([creatorId])
+  @@index([startTime, endTime])
+  @@index([status])
+}
+
+model ReservationParticipant {
+  id            String      @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt      DateTime    @default(now())
+
+  @@unique([reservationId, userId])
+  @@index([userId])
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum ReservationType {
+  ONE_ON_ONE
+  GROUP
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+}
