@@ -171,7 +171,23 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Failed to create calendar event:", error);
+    console.error("Failed to create admin calendar event:", error);
+  }
+
+  // Create Google Calendar event for member
+  try {
+    const memberEventTitle = `【予約】${block.admin.name || "管理者"}との面談`;
+    const memberEventDescription = agenda ? `議題: ${agenda}` : undefined;
+
+    await createCalendarEvent(session.user.id, {
+      summary: memberEventTitle,
+      description: memberEventDescription,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      attendeeEmails: block.admin.email ? [block.admin.email] : undefined,
+    });
+  } catch (error) {
+    console.error("Failed to create member calendar event:", error);
   }
 
   return NextResponse.json(reservation, { status: 201 });

@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@repo/database";
-import { updateCalendarEvent } from "@/services/google-calendar";
+import { createCalendarEvent, updateCalendarEvent } from "@/services/google-calendar";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -18,8 +18,14 @@ export async function POST(
     where: { id },
     include: {
       block: {
-        select: {
-          adminId: true,
+        include: {
+          admin: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
         },
       },
       participants: {
@@ -65,7 +71,7 @@ export async function POST(
     },
   });
 
-  // Update Google Calendar event with new attendee
+  // Update Google Calendar event with new attendee (admin's calendar)
   if (reservation.googleEventId) {
     try {
       const allParticipantEmails = [
@@ -74,15 +80,31 @@ export async function POST(
       ].filter(Boolean) as string[];
 
       await updateCalendarEvent(
-        reservation.block.adminId,
+        reservation.block.admin.id,
         reservation.googleEventId,
         {
           attendeeEmails: allParticipantEmails,
         }
       );
     } catch (error) {
-      console.error("Failed to update calendar event:", error);
+      console.error("Failed to update admin calendar event:", error);
     }
+  }
+
+  // Create Google Calendar event for joining member
+  try {
+    const memberEventTitle = `【予約】${reservation.block.admin.name || "管理者"}との面談`;
+    const memberEventDescription = reservation.agenda ? `議題: ${reservation.agenda}` : undefined;
+
+    await createCalendarEvent(session.user.id, {
+      summary: memberEventTitle,
+      description: memberEventDescription,
+      startTime: reservation.startTime,
+      endTime: reservation.endTime,
+      attendeeEmails: reservation.block.admin.email ? [reservation.block.admin.email] : undefined,
+    });
+  } catch (error) {
+    console.error("Failed to create member calendar event:", error);
   }
 
   return NextResponse.json({ success: true });
