@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -10,13 +10,15 @@ import { ReservationModal } from "./reservation-modal";
 
 type ReservationType = "ONE_ON_ONE" | "GROUP";
 
+interface Admin {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
 interface Slot {
   blockId: string;
-  admin: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
+  admin: Admin;
   startTime: string;
   endTime: string;
   reservations: {
@@ -45,6 +47,24 @@ export function CalendarView() {
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedAdminId, setSelectedAdminId] = useState<string | null>(null);
+
+  // Extract unique admins from slots
+  const admins = useMemo(() => {
+    const adminMap = new Map<string, Admin>();
+    slots.forEach((slot) => {
+      if (!adminMap.has(slot.admin.id)) {
+        adminMap.set(slot.admin.id, slot.admin);
+      }
+    });
+    return Array.from(adminMap.values());
+  }, [slots]);
+
+  // Filter slots by selected admin
+  const filteredSlots = useMemo(() => {
+    if (!selectedAdminId) return slots;
+    return slots.filter((slot) => slot.admin.id === selectedAdminId);
+  }, [slots, selectedAdminId]);
 
   const fetchSlots = async () => {
     try {
@@ -65,7 +85,7 @@ export function CalendarView() {
   }, []);
 
   useEffect(() => {
-    const calendarEvents: CalendarEvent[] = slots.map((slot) => {
+    const calendarEvents: CalendarEvent[] = filteredSlots.map((slot) => {
       const hasReservations = slot.reservations.length > 0;
       const hasOneOnOne = slot.reservations.some((r) => r.type === "ONE_ON_ONE");
       const hasGroup = slot.reservations.some((r) => r.type === "GROUP");
@@ -102,7 +122,7 @@ export function CalendarView() {
     });
 
     setEvents(calendarEvents);
-  }, [slots]);
+  }, [filteredSlots]);
 
   const handleEventClick = (info: EventClickArg) => {
     const slot = info.event.extendedProps.slot as Slot;
@@ -112,7 +132,7 @@ export function CalendarView() {
 
   const handleDateSelect = (info: DateSelectArg) => {
     // Find slot that matches the selected time
-    const matchingSlot = slots.find(
+    const matchingSlot = filteredSlots.find(
       (slot) =>
         new Date(slot.startTime).getTime() === info.start.getTime() &&
         new Date(slot.endTime).getTime() === info.end.getTime()
@@ -144,6 +164,26 @@ export function CalendarView() {
 
   return (
     <div className="rounded-lg bg-white p-4 shadow">
+      {/* Admin Selector */}
+      <div className="mb-4">
+        <label htmlFor="admin-select" className="block text-sm font-medium text-gray-700 mb-2">
+          予約する管理者を選択
+        </label>
+        <select
+          id="admin-select"
+          value={selectedAdminId || ""}
+          onChange={(e) => setSelectedAdminId(e.target.value || null)}
+          className="block w-full max-w-md rounded-md border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        >
+          <option value="">すべての管理者</option>
+          {admins.map((admin) => (
+            <option key={admin.id} value={admin.id}>
+              {admin.name || admin.email}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 rounded bg-green-500" />
