@@ -69,6 +69,7 @@ export async function GET() {
         endTime: slotEnd.toISOString(),
         reservations: slotReservations.map((r) => ({
           id: r.id,
+          type: r.type,
           title: r.title,
           participants: r.participants.map((p) => p.user),
         })),

@@ -8,6 +8,8 @@ import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, DateSelectArg } from "@fullcalendar/core";
 import { ReservationModal } from "./reservation-modal";
 
+type ReservationType = "ONE_ON_ONE" | "GROUP";
+
 interface Slot {
   blockId: string;
   admin: {
@@ -19,6 +21,7 @@ interface Slot {
   endTime: string;
   reservations: {
     id: string;
+    type: ReservationType;
     title: string | null;
     participants: { id: string; name: string | null; email: string }[];
   }[];
@@ -64,6 +67,8 @@ export function CalendarView() {
   useEffect(() => {
     const calendarEvents: CalendarEvent[] = slots.map((slot) => {
       const hasReservations = slot.reservations.length > 0;
+      const hasOneOnOne = slot.reservations.some((r) => r.type === "ONE_ON_ONE");
+      const hasGroup = slot.reservations.some((r) => r.type === "GROUP");
       const totalParticipants = slot.reservations.reduce(
         (sum, r) => sum + r.participants.length,
         0
@@ -73,8 +78,16 @@ export function CalendarView() {
       let title = "空き";
 
       if (hasReservations) {
-        backgroundColor = "#3b82f6"; // Reserved (blue)
-        title = `予約あり (${totalParticipants}人)`;
+        if (hasOneOnOne && hasGroup) {
+          backgroundColor = "#8b5cf6"; // Both types (purple)
+          title = `1on1 & FB会 (${totalParticipants}人)`;
+        } else if (hasOneOnOne) {
+          backgroundColor = "#3b82f6"; // 1on1 (blue)
+          title = `1on1 (${totalParticipants}人)`;
+        } else {
+          backgroundColor = "#f59e0b"; // フィードバック会 (amber)
+          title = `FB会 (${totalParticipants}人)`;
+        }
       }
 
       return {
@@ -131,14 +144,18 @@ export function CalendarView() {
 
   return (
     <div className="rounded-lg bg-white p-4 shadow">
-      <div className="mb-4 flex items-center gap-4 text-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-4 text-sm">
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 rounded bg-green-500" />
           <span>空き</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="h-4 w-4 rounded bg-blue-500" />
-          <span>予約あり</span>
+          <span>1on1</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-4 w-4 rounded bg-amber-500" />
+          <span>フィードバック会</span>
         </div>
       </div>
 

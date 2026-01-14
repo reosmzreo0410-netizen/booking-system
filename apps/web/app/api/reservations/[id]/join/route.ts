@@ -51,6 +51,14 @@ export async function POST(
     );
   }
 
+  // Check if reservation type allows joining (only GROUP/フィードバック会)
+  if (reservation.type !== "GROUP") {
+    return NextResponse.json(
+      { error: "この予約は1on1のため参加できません" },
+      { status: 400 }
+    );
+  }
+
   // Check if already a participant
   const isAlreadyParticipant = reservation.participants.some(
     (p) => p.user.email === session.user.email
@@ -93,7 +101,7 @@ export async function POST(
 
   // Create Google Calendar event for joining member
   try {
-    const memberEventTitle = `【予約】${reservation.block.admin.name || "管理者"}との面談`;
+    const memberEventTitle = `【フィードバック会】${reservation.block.admin.name || "管理者"}`;
     const memberEventDescription = reservation.agenda ? `議題: ${reservation.agenda}` : undefined;
 
     await createCalendarEvent(session.user.id, {

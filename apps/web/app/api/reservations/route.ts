@@ -10,6 +10,7 @@ const createReservationSchema = z.object({
   blockId: z.string(),
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
+  type: z.enum(["ONE_ON_ONE", "GROUP"]).default("ONE_ON_ONE"),
   title: z.string().optional(),
   agenda: z.string().optional(),
 });
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { blockId, startTime, endTime, title, agenda } = parsed.data;
+  const { blockId, startTime, endTime, type, title, agenda } = parsed.data;
 
   // Get block and admin info
   const block = await prisma.availableBlock.findUnique({
@@ -121,14 +122,18 @@ export async function POST(request: NextRequest) {
   });
 
   // Create reservation
+  const defaultTitle = type === "GROUP"
+    ? `${user?.name || "メンバー"}のフィードバック会`
+    : `${user?.name || "メンバー"}との1on1`;
+
   const reservation = await prisma.reservation.create({
     data: {
       blockId,
       creatorId: session.user.id,
-      type: "ONE_ON_ONE",
+      type,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      title: title || `${user?.name || "メンバー"}との予約`,
+      title: title || defaultTitle,
       agenda,
       participants: {
         create: {
@@ -153,7 +158,9 @@ export async function POST(request: NextRequest) {
 
   // Create Google Calendar event for admin
   try {
-    const eventTitle = `【予約】${user?.name || "メンバー"}との面談`;
+    const eventTitle = type === "GROUP"
+      ? `【フィードバック会】${user?.name || "メンバー"}`
+      : `【1on1】${user?.name || "メンバー"}`;
     const eventDescription = agenda ? `議題: ${agenda}` : undefined;
 
     const eventId = await createCalendarEvent(block.admin.id, {
@@ -176,7 +183,9 @@ export async function POST(request: NextRequest) {
 
   // Create Google Calendar event for member
   try {
-    const memberEventTitle = `【予約】${block.admin.name || "管理者"}との面談`;
+    const memberEventTitle = type === "GROUP"
+      ? `【フィードバック会】${block.admin.name || "管理者"}`
+      : `【1on1】${block.admin.name || "管理者"}`;
     const memberEventDescription = agenda ? `議題: ${agenda}` : undefined;
 
     await createCalendarEvent(session.user.id, {

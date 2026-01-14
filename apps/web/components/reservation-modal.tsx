@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 
+type ReservationType = "ONE_ON_ONE" | "GROUP";
+
 interface Slot {
   blockId: string;
   admin: {
@@ -14,6 +16,7 @@ interface Slot {
   endTime: string;
   reservations: {
     id: string;
+    type: ReservationType;
     title: string | null;
     participants: { id: string; name: string | null; email: string }[];
   }[];
@@ -34,6 +37,7 @@ export function ReservationModal({
 }: ReservationModalProps) {
   const { data: session } = useSession();
   const [agenda, setAgenda] = useState("");
+  const [reservationType, setReservationType] = useState<ReservationType>("ONE_ON_ONE");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -49,9 +53,9 @@ export function ReservationModal({
     });
   };
 
-  // 自分が参加していない予約を探す
-  const joinableReservation = slot.reservations.find(
-    (r) => !r.participants.some((p) => p.id === session?.user?.id)
+  // 自分が参加していないフィードバック会を探す（1on1は参加不可）
+  const joinableReservations = slot.reservations.filter(
+    (r) => r.type === "GROUP" && !r.participants.some((p) => p.id === session?.user?.id)
   );
 
   // 自分が既に参加している予約
@@ -72,6 +76,7 @@ export function ReservationModal({
           blockId: slot.blockId,
           startTime: slot.startTime,
           endTime: slot.endTime,
+          type: reservationType,
           agenda: agenda || undefined,
         }),
       });
@@ -152,46 +157,66 @@ export function ReservationModal({
               この時間の予約
             </h3>
             <div className="space-y-2">
-              {slot.reservations.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-lg border border-gray-200 bg-white p-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {r.title || "予約"}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {r.participants.length}人参加中
-                      </p>
+              {slot.reservations.map((r) => {
+                const isParticipant = r.participants.some((p) => p.id === session?.user?.id);
+                const canJoin = r.type === "GROUP" && !isParticipant;
+
+                return (
+                  <div
+                    key={r.id}
+                    className="rounded-lg border border-gray-200 bg-white p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900">
+                            {r.title || "予約"}
+                          </p>
+                          <span
+                            className={`rounded px-2 py-0.5 text-xs ${
+                              r.type === "GROUP"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}
+                          >
+                            {r.type === "GROUP" ? "フィードバック会" : "1on1"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          {r.participants.length}人参加中
+                        </p>
+                      </div>
+                      {isParticipant ? (
+                        <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-700">
+                          参加中
+                        </span>
+                      ) : canJoin ? (
+                        <button
+                          onClick={() => handleJoin(r.id)}
+                          disabled={isSubmitting}
+                          className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white transition hover:bg-blue-600 disabled:opacity-50"
+                        >
+                          参加する
+                        </button>
+                      ) : (
+                        <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-500">
+                          参加不可
+                        </span>
+                      )}
                     </div>
-                    {r.participants.some((p) => p.id === session?.user?.id) ? (
-                      <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-700">
-                        参加中
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleJoin(r.id)}
-                        disabled={isSubmitting}
-                        className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white transition hover:bg-blue-600 disabled:opacity-50"
-                      >
-                        参加する
-                      </button>
-                    )}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {r.participants.map((p) => (
+                        <span
+                          key={p.id}
+                          className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                        >
+                          {p.name || p.email}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {r.participants.map((p) => (
-                      <span
-                        key={p.id}
-                        className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
-                      >
-                        {p.name || p.email}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -215,6 +240,54 @@ export function ReservationModal({
             </div>
 
             <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="mb-2 block font-medium text-gray-700">
+                  予約タイプ
+                </label>
+                <div className="flex gap-3">
+                  <label
+                    className={`flex flex-1 cursor-pointer items-center justify-center rounded-lg border-2 p-3 transition ${
+                      reservationType === "ONE_ON_ONE"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="type"
+                      value="ONE_ON_ONE"
+                      checked={reservationType === "ONE_ON_ONE"}
+                      onChange={() => setReservationType("ONE_ON_ONE")}
+                      className="sr-only"
+                    />
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">1on1</div>
+                      <div className="text-xs text-gray-500">自分のみ</div>
+                    </div>
+                  </label>
+                  <label
+                    className={`flex flex-1 cursor-pointer items-center justify-center rounded-lg border-2 p-3 transition ${
+                      reservationType === "GROUP"
+                        ? "border-amber-500 bg-amber-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="type"
+                      value="GROUP"
+                      checked={reservationType === "GROUP"}
+                      onChange={() => setReservationType("GROUP")}
+                      className="sr-only"
+                    />
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">フィードバック会</div>
+                      <div className="text-xs text-gray-500">他メンバーも参加可</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               <div className="mb-4">
                 <label
                   htmlFor="agenda"
