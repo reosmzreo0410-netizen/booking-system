@@ -44,3 +44,4 @@ yarn-error.log*
 # IDE
 .idea
 .vscode
+.env*.local

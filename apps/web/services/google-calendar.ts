@@ -215,16 +215,13 @@ export async function getBusyTimes(
     // Skip cancelled events
     if (event.status === "cancelled") continue;
 
-    // Get event times
-    const start = event.start?.dateTime || event.start?.date;
-    const end = event.end?.dateTime || event.end?.date;
+    // Skip all-day events (they don't have dateTime, only date)
+    if (!event.start?.dateTime || !event.end?.dateTime) continue;
 
-    if (start && end) {
-      busyTimes.push({
-        start: new Date(start),
-        end: new Date(end),
-      });
-    }
+    busyTimes.push({
+      start: new Date(event.start.dateTime),
+      end: new Date(event.end.dateTime),
+    });
   }
 
   return busyTimes;
