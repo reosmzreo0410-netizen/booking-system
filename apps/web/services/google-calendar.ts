@@ -187,3 +187,45 @@ export async function deleteCalendarEvent(userId: string, eventId: string) {
     sendUpdates: "all",
   });
 }
+
+// Get busy times from Google Calendar (excluding [予約可] events)
+export async function getBusyTimes(
+  userId: string,
+  timeMin: Date,
+  timeMax: Date
+): Promise<{ start: Date; end: Date }[]> {
+  const calendar = await getGoogleCalendarClient(userId);
+
+  // Get all events in the time range
+  const response = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+
+  const events = response.data.items || [];
+  const busyTimes: { start: Date; end: Date }[] = [];
+
+  for (const event of events) {
+    // Skip [予約可] events - these are available slots
+    if (event.summary?.includes(AVAILABLE_KEYWORD)) continue;
+
+    // Skip cancelled events
+    if (event.status === "cancelled") continue;
+
+    // Get event times
+    const start = event.start?.dateTime || event.start?.date;
+    const end = event.end?.dateTime || event.end?.date;
+
+    if (start && end) {
+      busyTimes.push({
+        start: new Date(start),
+        end: new Date(end),
+      });
+    }
+  }
+
+  return busyTimes;
+}

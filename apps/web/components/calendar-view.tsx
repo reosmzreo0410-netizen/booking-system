@@ -169,7 +169,7 @@ export function CalendarView() {
         }}
         locale="ja"
         slotMinTime="08:00:00"
-        slotMaxTime="21:00:00"
+        slotMaxTime="24:00:00"
         slotDuration="00:30:00"
         allDaySlot={false}
         events={events}

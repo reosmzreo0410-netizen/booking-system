@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@repo/database";
+import { getBusyTimes } from "@/services/google-calendar";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -10,9 +11,12 @@ export async function GET() {
   }
 
   // Get all available blocks from admins
+  const now = new Date();
+  const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
   const blocks = await prisma.availableBlock.findMany({
     where: {
-      startTime: { gte: new Date() },
+      startTime: { gte: now },
     },
     include: {
       admin: {
@@ -45,7 +49,34 @@ export async function GET() {
     orderBy: { startTime: "asc" },
   });
 
-  // Transform blocks into 30-minute slots
+  // Get unique admin IDs
+  const adminIds = [...new Set(blocks.map((b) => b.admin.id))];
+
+  // Fetch busy times for each admin
+  const adminBusyTimes: Record<string, { start: Date; end: Date }[]> = {};
+  for (const adminId of adminIds) {
+    try {
+      adminBusyTimes[adminId] = await getBusyTimes(adminId, now, thirtyDaysLater);
+    } catch (error) {
+      console.error(`Failed to get busy times for admin ${adminId}:`, error);
+      adminBusyTimes[adminId] = [];
+    }
+  }
+
+  // Helper function to check if a slot conflicts with busy times
+  const isSlotBusy = (
+    adminId: string,
+    slotStart: Date,
+    slotEnd: Date
+  ): boolean => {
+    const busyTimes = adminBusyTimes[adminId] || [];
+    return busyTimes.some((busy) => {
+      // Check if there's any overlap
+      return slotStart < busy.end && slotEnd > busy.start;
+    });
+  };
+
+  // Transform blocks into 30-minute slots, filtering out busy slots
   const slots = blocks.flatMap((block) => {
     const slots = [];
     const startTime = new Date(block.startTime);
@@ -54,6 +85,12 @@ export async function GET() {
     while (startTime < endTime) {
       const slotEnd = new Date(startTime.getTime() + 30 * 60 * 1000);
       if (slotEnd > endTime) break;
+
+      // Skip this slot if it conflicts with admin's other events
+      if (isSlotBusy(block.admin.id, startTime, slotEnd)) {
+        startTime.setTime(startTime.getTime() + 30 * 60 * 1000);
+        continue;
+      }
 
       // Find reservations that overlap with this slot
       const slotReservations = block.reservations.filter((r) => {
