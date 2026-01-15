@@ -50,7 +50,10 @@ export async function GET(request: NextRequest) {
         },
       },
       participants: {
-        include: {
+        select: {
+          id: true,
+          guestName: true,
+          guestEmail: true,
           user: {
             select: {
               id: true,

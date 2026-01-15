@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 
+interface Participant {
+  id: string;
+  guestName: string | null;
+  guestEmail: string | null;
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
+}
+
 interface Reservation {
   id: string;
   type: "ONE_ON_ONE" | "GROUP";
@@ -10,6 +21,8 @@ interface Reservation {
   startTime: string;
   endTime: string;
   status: string;
+  guestName: string | null;
+  guestEmail: string | null;
   block: {
     admin: {
       id: string;
@@ -22,14 +35,8 @@ interface Reservation {
     id: string;
     name: string | null;
     email: string;
-  };
-  participants: {
-    user: {
-      id: string;
-      name: string | null;
-      email: string;
-    };
-  }[];
+  } | null;
+  participants: Participant[];
 }
 
 export function ReservationList() {
@@ -81,6 +88,10 @@ export function ReservationList() {
     });
   };
 
+  const getParticipantName = (p: Participant) => {
+    return p.guestName || p.user?.name || p.guestEmail || p.user?.email || "参加者";
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-48 items-center justify-center">
@@ -117,9 +128,9 @@ export function ReservationList() {
                 key={reservation.id}
                 className="rounded-lg bg-white p-4 shadow"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1">
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex items-center gap-2 flex-wrap">
                       <span
                         className={`rounded px-2 py-0.5 text-xs font-medium ${
                           reservation.type === "GROUP"
@@ -130,7 +141,7 @@ export function ReservationList() {
                         {reservation.type === "GROUP" ? "グループ" : "1対1"}
                       </span>
                       <span className="text-sm text-gray-500">
-                        {reservation.participants.length}人参加
+                        {reservation.participants.length || (reservation.guestName ? 1 : 0)}人参加
                       </span>
                     </div>
 
@@ -164,21 +175,26 @@ export function ReservationList() {
                     <div className="mt-3">
                       <p className="text-xs text-gray-500">参加者:</p>
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {reservation.participants.map((p) => (
+                        {reservation.participants.map((p, idx) => (
                           <span
-                            key={p.user.id}
+                            key={p.user?.id || p.id || idx}
                             className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
                           >
-                            {p.user.name || p.user.email}
+                            {getParticipantName(p)}
                           </span>
                         ))}
+                        {reservation.participants.length === 0 && reservation.guestName && (
+                          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                            {reservation.guestName}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => handleCancel(reservation.id)}
-                    className="ml-4 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50"
+                    className="w-full sm:w-auto rounded-lg border border-red-200 px-3 py-2 sm:py-1.5 text-sm text-red-600 transition hover:bg-red-50"
                   >
                     キャンセル
                   </button>

@@ -145,8 +145,8 @@ export function ReservationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
+      <div className="w-full sm:max-w-md rounded-t-2xl sm:rounded-lg bg-white p-4 sm:p-6 shadow-xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold">予約</h2>
           <button
