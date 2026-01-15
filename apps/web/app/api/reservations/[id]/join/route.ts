@@ -39,7 +39,17 @@ export async function POST(
           },
         },
       },
-      participants: true,
+      participants: {
+        select: {
+          id: true,
+          guestEmail: true,
+          user: {
+            select: {
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
