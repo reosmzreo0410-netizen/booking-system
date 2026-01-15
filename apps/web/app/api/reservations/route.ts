@@ -13,31 +13,20 @@ const createReservationSchema = z.object({
   type: z.enum(["ONE_ON_ONE", "GROUP"]).default("ONE_ON_ONE"),
   title: z.string().optional(),
   agenda: z.string().optional(),
+  guestName: z.string().min(1, "名前を入力してください"),
+  guestEmail: z.string().email("有効なメールアドレスを入力してください").optional(),
 });
 
 export async function GET(request: NextRequest) {
   const session = await auth();
 
-  if (!session?.user) {
+  // Admin only endpoint for viewing reservations
+  if (!session?.user || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const filter = searchParams.get("filter"); // "my" | "all"
-
-  const whereClause =
-    filter === "all" && session.user.role === "ADMIN"
-      ? {}
-      : {
-          OR: [
-            { creatorId: session.user.id },
-            { participants: { some: { userId: session.user.id } } },
-          ],
-        };
-
   const reservations = await prisma.reservation.findMany({
     where: {
-      ...whereClause,
       status: "CONFIRMED",
     },
     include: {
@@ -79,12 +68,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // Public endpoint - no authentication required for guests
   const body = await request.json();
   const parsed = createReservationSchema.safeParse(body);
 
@@ -95,7 +79,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { blockId, startTime, endTime, type, title, agenda } = parsed.data;
+  const { blockId, startTime, endTime, type, title, agenda, guestName, guestEmail } = parsed.data;
 
   // Get block and admin info
   const block = await prisma.availableBlock.findUnique({
@@ -115,21 +99,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Block not found" }, { status: 404 });
   }
 
-  // Get user info
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { email: true, name: true },
-  });
-
-  // Create reservation
+  // Create reservation with guest info
   const defaultTitle = type === "GROUP"
-    ? `${user?.name || "メンバー"}のフィードバック会`
-    : `${user?.name || "メンバー"}との1on1`;
+    ? `${guestName}のフィードバック会`
+    : `${guestName}との1on1`;
 
   const reservation = await prisma.reservation.create({
     data: {
       blockId,
-      creatorId: session.user.id,
+      guestName,
+      guestEmail,
       type,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
@@ -137,38 +116,29 @@ export async function POST(request: NextRequest) {
       agenda,
       participants: {
         create: {
-          userId: session.user.id,
+          guestName,
+          guestEmail,
         },
       },
     },
     include: {
-      participants: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
+      participants: true,
     },
   });
 
-  // Create Google Calendar event for admin
+  // Create Google Calendar event for admin only
   try {
     const eventTitle = type === "GROUP"
-      ? `【フィードバック会】${user?.name || "メンバー"}`
-      : `【1on1】${user?.name || "メンバー"}`;
-    const eventDescription = agenda ? `議題: ${agenda}` : undefined;
+      ? `【フィードバック会】${guestName}`
+      : `【1on1】${guestName}`;
+    const eventDescription = agenda ? `議題: ${agenda}\n予約者: ${guestName}${guestEmail ? ` (${guestEmail})` : ""}` : `予約者: ${guestName}${guestEmail ? ` (${guestEmail})` : ""}`;
 
     const eventId = await createCalendarEvent(block.admin.id, {
       summary: eventTitle,
       description: eventDescription,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      attendeeEmails: user?.email ? [user.email] : undefined,
+      attendeeEmails: guestEmail ? [guestEmail] : undefined,
     });
 
     if (eventId) {
@@ -179,24 +149,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Failed to create admin calendar event:", error);
-  }
-
-  // Create Google Calendar event for member
-  try {
-    const memberEventTitle = type === "GROUP"
-      ? `【フィードバック会】${block.admin.name || "管理者"}`
-      : `【1on1】${block.admin.name || "管理者"}`;
-    const memberEventDescription = agenda ? `議題: ${agenda}` : undefined;
-
-    await createCalendarEvent(session.user.id, {
-      summary: memberEventTitle,
-      description: memberEventDescription,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      attendeeEmails: block.admin.email ? [block.admin.email] : undefined,
-    });
-  } catch (error) {
-    console.error("Failed to create member calendar event:", error);
   }
 
   return NextResponse.json(reservation, { status: 201 });

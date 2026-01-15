@@ -21,25 +21,27 @@ export function Header() {
             >
               カレンダー
             </Link>
-            <Link
-              href="/reservations"
-              className="text-gray-600 transition hover:text-gray-900"
-            >
-              予約一覧
-            </Link>
             {session?.user?.role === "ADMIN" && (
-              <Link
-                href="/admin"
-                className="text-gray-600 transition hover:text-gray-900"
-              >
-                管理
-              </Link>
+              <>
+                <Link
+                  href="/reservations"
+                  className="text-gray-600 transition hover:text-gray-900"
+                >
+                  予約一覧
+                </Link>
+                <Link
+                  href="/admin"
+                  className="text-gray-600 transition hover:text-gray-900"
+                >
+                  管理
+                </Link>
+              </>
             )}
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          {session?.user && (
+          {session?.user ? (
             <>
               <div className="flex items-center gap-2">
                 {session.user.image && (
@@ -60,6 +62,13 @@ export function Header() {
               </div>
               <SignOutButton />
             </>
+          ) : (
+            <Link
+              href="/login"
+              className="text-sm text-gray-600 transition hover:text-gray-900"
+            >
+              管理者ログイン
+            </Link>
           )}
         </div>
       </div>

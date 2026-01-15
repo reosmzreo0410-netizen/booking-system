@@ -1,15 +1,7 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { CalendarView } from "@/components/calendar-view";
 
-export default async function Home() {
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect("/login");
-  }
-
+export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />

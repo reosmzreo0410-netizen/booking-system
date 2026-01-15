@@ -45,8 +45,10 @@ model Reservation {
   id            String            @id @default(cuid())
   blockId       String
   block         AvailableBlock    @relation(fields: [blockId], references: [id], onDelete: Cascade)
-  creatorId     String
-  creator       User              @relation("CreatedBy", fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId     String?
+  creator       User?             @relation("CreatedBy", fields: [creatorId], references: [id], onDelete: Cascade)
+  guestName     String?
+  guestEmail    String?
   type          ReservationType
   startTime     DateTime
   endTime       DateTime
@@ -69,12 +71,14 @@ model ReservationParticipant {
   id            String      @id @default(cuid())
   reservationId String
   reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestName     String?
+  guestEmail    String?
   joinedAt      DateTime    @default(now())
 
-  @@unique([reservationId, userId])
   @@index([userId])
+  @@index([reservationId])
 }
 
 enum Role {

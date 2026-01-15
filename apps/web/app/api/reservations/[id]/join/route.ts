@@ -1,18 +1,29 @@
-import { auth } from "@/auth";
 import { prisma } from "@repo/database";
-import { createCalendarEvent, updateCalendarEvent } from "@/services/google-calendar";
+import { updateCalendarEvent } from "@/services/google-calendar";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+const joinSchema = z.object({
+  guestName: z.string().min(1, "名前を入力してください"),
+  guestEmail: z.string().email("有効なメールアドレスを入力してください").optional(),
+});
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
   const { id } = await params;
+  const body = await request.json();
+  const parsed = joinSchema.safeParse(body);
 
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", details: parsed.error.errors },
+      { status: 400 }
+    );
   }
+
+  const { guestName, guestEmail } = parsed.data;
 
   const reservation = await prisma.reservation.findUnique({
     where: { id },
@@ -28,15 +39,7 @@ export async function POST(
           },
         },
       },
-      participants: {
-        include: {
-          user: {
-            select: {
-              email: true,
-            },
-          },
-        },
-      },
+      participants: true,
     },
   });
 
@@ -59,33 +62,22 @@ export async function POST(
     );
   }
 
-  // Check if already a participant
-  const isAlreadyParticipant = reservation.participants.some(
-    (p) => p.user.email === session.user.email
-  );
-
-  if (isAlreadyParticipant) {
-    return NextResponse.json(
-      { error: "Already a participant" },
-      { status: 400 }
-    );
-  }
-
-  // Add as participant
+  // Add as guest participant
   await prisma.reservationParticipant.create({
     data: {
       reservationId: id,
-      userId: session.user.id,
+      guestName,
+      guestEmail,
     },
   });
 
   // Update Google Calendar event with new attendee (admin's calendar)
-  if (reservation.googleEventId) {
+  if (reservation.googleEventId && guestEmail) {
     try {
       const allParticipantEmails = [
-        ...reservation.participants.map((p) => p.user.email),
-        session.user.email,
-      ].filter(Boolean) as string[];
+        ...reservation.participants.map((p) => p.guestEmail || p.user?.email).filter(Boolean),
+        guestEmail,
+      ] as string[];
 
       await updateCalendarEvent(
         reservation.block.admin.id,
@@ -97,22 +89,6 @@ export async function POST(
     } catch (error) {
       console.error("Failed to update admin calendar event:", error);
     }
-  }
-
-  // Create Google Calendar event for joining member
-  try {
-    const memberEventTitle = `【フィードバック会】${reservation.block.admin.name || "管理者"}`;
-    const memberEventDescription = reservation.agenda ? `議題: ${reservation.agenda}` : undefined;
-
-    await createCalendarEvent(session.user.id, {
-      summary: memberEventTitle,
-      description: memberEventDescription,
-      startTime: reservation.startTime,
-      endTime: reservation.endTime,
-      attendeeEmails: reservation.block.admin.email ? [reservation.block.admin.email] : undefined,
-    });
-  } catch (error) {
-    console.error("Failed to create member calendar event:", error);
   }
 
   return NextResponse.json({ success: true });

@@ -1,15 +1,9 @@
-import { auth } from "@/auth";
 import { prisma } from "@repo/database";
 import { getBusyTimes } from "@/services/google-calendar";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const session = await auth();
-
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // Public endpoint - no authentication required
   // Get all available blocks from admins
   const now = new Date();
   const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -33,7 +27,10 @@ export async function GET() {
         },
         include: {
           participants: {
-            include: {
+            select: {
+              id: true,
+              guestName: true,
+              guestEmail: true,
               user: {
                 select: {
                   id: true,
@@ -108,7 +105,13 @@ export async function GET() {
           id: r.id,
           type: r.type,
           title: r.title,
-          participants: r.participants.map((p) => p.user),
+          participants: r.participants.map((p) => ({
+            id: p.user?.id || p.id,
+            name: p.user?.name || p.guestName || null,
+            email: p.user?.email || p.guestEmail || "",
+            guestName: p.guestName,
+            guestEmail: p.guestEmail,
+          })),
         })),
       });
 
